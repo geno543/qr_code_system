@@ -9,7 +9,7 @@ const crypto = require('crypto');
 const app = express();
 
 // Admin credentials
-const ADMIN_PASSWORD = 'genoo';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'genoo';
 
 // In-memory storage for Vercel (replace with cloud DB for production)
 let attendees = [];
@@ -18,9 +18,15 @@ let activeSessions = new Map();
 // Middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(express.static('public'));
+
+// For Vercel, we need to handle static files differently
+if (process.env.NODE_ENV !== 'production') {
+    app.use(express.static('public'));
+    app.use('/qr', express.static(path.join(__dirname, 'public/qr')));
+}
+
 app.set('view engine', 'ejs');
-app.set('views', './views');
+app.set('views', path.join(__dirname, 'views'));
 
 // Authentication middleware
 function requireAuth(req, res, next) {
@@ -331,19 +337,30 @@ app.get('/health', (req, res) => {
     res.json({ 
         status: 'OK', 
         attendees: attendees.length,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV || 'development'
     });
 });
 
 // Error handling
 app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({ error: 'Something went wrong!' });
+    console.error('Error:', err.message);
+    console.error('Stack:', err.stack);
+    res.status(500).json({ 
+        error: 'Something went wrong!',
+        message: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error',
+        timestamp: new Date().toISOString()
+    });
 });
 
 // 404 handler
 app.use((req, res) => {
-    res.status(404).json({ error: 'Not found' });
+    console.log('404 - Not found:', req.method, req.url);
+    res.status(404).json({ 
+        error: 'Not found',
+        path: req.url,
+        method: req.method
+    });
 });
 
 // For Vercel
