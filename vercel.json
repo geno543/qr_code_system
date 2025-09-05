@@ -1,12 +1,6 @@
 {
   "version": 2,
   "name": "qr-event-system",
-  "builds": [
-    {
-      "src": "api/index.js",
-      "use": "@vercel/node"
-    }
-  ],
   "routes": [
     {
       "src": "/(.*)",
