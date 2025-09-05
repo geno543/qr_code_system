@@ -25,9 +25,15 @@
     <div class="container my-4">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h2><i class="fas fa-users-cog"></i> Admin Dashboard</h2>
-            <button class="btn btn-success" onclick="loadAttendees()">
-                <i class="fas fa-sync"></i> Refresh
-            </button>
+            <div>
+                <button class="btn btn-success me-2" onclick="loadAttendees()">
+                    <i class="fas fa-sync"></i> Refresh
+                </button>
+                <button class="btn btn-outline-info" onclick="toggleAutoRefresh()">
+                    <i class="fas fa-clock" id="auto-refresh-icon"></i> 
+                    <span id="auto-refresh-text">Auto-refresh: ON</span>
+                </button>
+            </div>
         </div>
 
         <!-- Statistics -->
@@ -191,12 +197,40 @@
         let allAttendees = [];
         let filteredAttendees = [];
         let authToken = null;
+        let autoRefreshInterval = null;
         
         // Load attendees when page loads
         window.addEventListener('load', function() {
             console.log('Page loaded, checking authentication');
             checkAuthentication();
         });
+
+        // Auto-refresh every 10 seconds
+        function startAutoRefresh() {
+            if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+            autoRefreshInterval = setInterval(() => {
+                loadAttendees(true); // Silent refresh
+            }, 10000); // 10 seconds
+        }
+
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+        }
+
+        function toggleAutoRefresh() {
+            if (autoRefreshInterval) {
+                stopAutoRefresh();
+                document.getElementById('auto-refresh-text').textContent = 'Auto-refresh: OFF';
+                document.getElementById('auto-refresh-icon').className = 'fas fa-clock text-muted';
+            } else {
+                startAutoRefresh();
+                document.getElementById('auto-refresh-text').textContent = 'Auto-refresh: ON';
+                document.getElementById('auto-refresh-icon').className = 'fas fa-clock text-success';
+            }
+        }
 
         function checkAuthentication() {
             // Get token from localStorage
@@ -224,6 +258,7 @@
                 if (response.ok) {
                     console.log('Token verified, loading attendees');
                     loadAttendees();
+                    startAutoRefresh(); // Start auto-refresh
                 } else {
                     console.log('Token invalid, redirecting to login');
                     // Token invalid, redirect to login
@@ -245,6 +280,7 @@
         }
 
         async function logout() {
+            stopAutoRefresh(); // Stop auto-refresh
             try {
                 await fetch('/admin/logout', {
                     method: 'POST',
@@ -258,13 +294,15 @@
             }
         }
 
-        async function loadAttendees() {
+        async function loadAttendees(silent = false) {
             console.log('Loading attendees...');
             
-            // Show loading state
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('content').style.display = 'none';
-            document.getElementById('error').style.display = 'none';
+            if (!silent) {
+                // Show loading state only if not silent refresh
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('content').style.display = 'none';
+                document.getElementById('error').style.display = 'none';
+            }
             
             try {
                 const response = await fetch('/admin/attendees', {
@@ -288,26 +326,30 @@
                 updateStatistics(allAttendees);
                 filterAttendees();
                 
-                // Show content
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('content').style.display = 'block';
+                if (!silent) {
+                    // Show content only if not silent refresh
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('content').style.display = 'block';
+                }
                 
             } catch (error) {
                 console.error('Error loading attendees:', error);
                 
-                // Show error
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('error').style.display = 'block';
-                document.getElementById('error').innerHTML = `
-                    <strong>Error:</strong> ${error.message} 
-                    <button class="btn btn-sm btn-outline-danger ms-2" onclick="loadAttendees()">Retry</button>
-                `;
+                if (!silent) {
+                    // Show error only if not silent refresh
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('error').style.display = 'block';
+                    document.getElementById('error').innerHTML = `
+                        <strong>Error:</strong> ${error.message} 
+                        <button class="btn btn-sm btn-outline-danger ms-2" onclick="loadAttendees()">Retry</button>
+                    `;
+                }
             }
         }
 
         function updateStatistics(attendees) {
             const total = attendees.length;
-            const scanned = attendees.filter(a => a.is_scanned).length;
+            const scanned = attendees.filter(a => a.scanned).length;
             const pending = total - scanned;
             const percentage = total > 0 ? Math.round((scanned / total) * 100) : 0;
 
@@ -330,8 +372,8 @@
                     (attendee.email && attendee.email.toLowerCase().includes(searchTerm));
 
                 const matchesStatus = !statusFilter || 
-                    (statusFilter === 'scanned' && attendee.is_scanned) ||
-                    (statusFilter === 'pending' && !attendee.is_scanned);
+                    (statusFilter === 'scanned' && attendee.scanned) ||
+                    (statusFilter === 'pending' && !attendee.scanned);
 
                 return matchesSearch && matchesStatus;
             });
@@ -379,15 +421,15 @@
                     <td><code>${attendee.ticket_id}</code></td>
                     <td>${attendee.email || '<span class="text-muted">No email</span>'}</td>
                     <td>
-                        ${attendee.is_scanned ? 
+                        ${attendee.scanned ? 
                             '<span class="badge bg-success"><i class="fas fa-check"></i> Scanned</span>' :
                             '<span class="badge bg-warning"><i class="fas fa-clock"></i> Pending</span>'
                         }
                         <br>
-                        <button class="btn btn-sm btn-outline-${attendee.is_scanned ? 'warning' : 'success'} mt-1" 
-                                onclick="toggleScanStatus(${attendee.id}, ${!attendee.is_scanned})">
-                            <i class="fas fa-${attendee.is_scanned ? 'undo' : 'check'}"></i>
-                            ${attendee.is_scanned ? 'Unmark' : 'Mark Scanned'}
+                        <button class="btn btn-sm btn-outline-${attendee.scanned ? 'warning' : 'success'} mt-1" 
+                                onclick="toggleScanStatus(${attendee.id}, ${!attendee.scanned})">
+                            <i class="fas fa-${attendee.scanned ? 'undo' : 'check'}"></i>
+                            ${attendee.scanned ? 'Unmark' : 'Mark Scanned'}
                         </button>
                     </td>
                     <td>
@@ -397,8 +439,8 @@
                         }
                     </td>
                     <td>
-                        ${attendee.qr_code_path ? 
-                            `<img src="/qr/${attendee.qr_code_path}" style="width: 50px; height: 50px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;" alt="QR Code" onclick="viewQRCode('${attendee.qr_code_path}', '${attendee.name}')">` :
+                        ${attendee.qr_code ? 
+                            `<img src="${attendee.qr_code}" style="width: 50px; height: 50px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;" alt="QR Code" onclick="viewQRCode('${attendee.qr_code}', '${attendee.name}')">` :
                             '<i class="fas fa-exclamation-triangle text-warning" title="QR code not generated"></i>'
                         }
                     </td>
@@ -435,7 +477,7 @@
                     method: 'PUT',
                     headers: getAuthHeaders(),
                     body: JSON.stringify({ 
-                        is_scanned: newStatus, 
+                        scanned: newStatus, 
                         scan_time: newStatus ? new Date().toISOString() : null 
                     })
                 });
@@ -445,7 +487,7 @@
                     await loadAttendees(); // Refresh data
                     alert(`Attendee scan status ${newStatus ? 'marked as scanned' : 'unmarked'}`);
                 } else {
-                    alert('Failed to update scan status');
+                    alert('Failed to update scan status: ' + (result.message || result.error));
                 }
             } catch (error) {
                 console.error('Error updating scan status:', error);
@@ -598,7 +640,7 @@
                         method: 'PUT',
                         headers: getAuthHeaders(),
                         body: JSON.stringify({ 
-                            is_scanned: isScanned, 
+                            scanned: isScanned, 
                             scan_time: isScanned ? new Date().toISOString() : null 
                         })
                     });
@@ -643,7 +685,7 @@
                     `"${a.name}"`,
                     `"${a.ticket_id}"`,
                     `"${a.email || ''}"`,
-                    a.is_scanned ? 'Scanned' : 'Pending',
+                    a.scanned ? 'Scanned' : 'Pending',
                     `"${a.scan_time || ''}"`,
                     `"${a.created_at}"`
                 ].join(','))
@@ -737,7 +779,7 @@
             }
         }
 
-        function viewQRCode(qrPath, attendeeName) {
+        function viewQRCode(qrUrl, attendeeName) {
             // Create modal to view QR code
             const modal = document.createElement('div');
             modal.className = 'modal fade';
@@ -749,9 +791,9 @@
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body text-center">
-                            <img src="/qr/${qrPath}" class="img-fluid" style="max-width: 300px;" alt="QR Code">
+                            <img src="${qrUrl}" class="img-fluid" style="max-width: 300px;" alt="QR Code">
                             <div class="mt-3">
-                                <a href="/qr/${qrPath}" download="${attendeeName.replace(/[^a-zA-Z0-9]/g, '_')}_QR.png" class="btn btn-primary">
+                                <a href="${qrUrl}" download="${attendeeName.replace(/[^a-zA-Z0-9]/g, '_')}_QR.png" class="btn btn-primary">
                                     <i class="fas fa-download"></i> Download
                                 </a>
                             </div>
