@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Camera Scanner</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        #video {
+            width: 100%;
+            max-width: 500px;
+            border: 3px solid #007bff;
+            border-radius: 10px;
+        }
+        #canvas {
+            display: none;
+        }
+        .scanner-box {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .qr-overlay {
+            position: relative;
+            display: inline-block;
+        }
+        .qr-frame {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 250px;
+            height: 250px;
+            border: 2px solid #00ff00;
+            border-radius: 10px;
+            pointer-events: none;
+        }
+        
+        /* Enhanced feedback styles */
+        .alert {
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .alert-success {
+            background: linear-gradient(135deg, #d4edda, #c3e6cb);
+            border-color: #28a745;
+            color: #155724;
+        }
+        
+        .alert-danger {
+            background: linear-gradient(135deg, #f8d7da, #f5c6cb);
+            border-color: #dc3545;
+            color: #721c24;
+        }
+        
+        .flash-success {
+            animation: flashGreen 0.3s ease;
+        }
+        
+        .flash-error {
+            animation: flashRed 0.3s ease;
+        }
+        
+        @keyframes flashGreen {
+            0% { background-color: #f8f9fa; }
+            50% { background-color: #d4edda; }
+            100% { background-color: #f8f9fa; }
+        }
+        
+        @keyframes flashRed {
+            0% { background-color: #f8f9fa; }
+            50% { background-color: #f8d7da; }
+            100% { background-color: #f8f9fa; }
+        }
+        
+        #result {
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1050;
+            min-width: 300px;
+            max-width: 500px;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/"><i class="fas fa-qrcode"></i> QR Event System</a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/"><i class="fas fa-home"></i> Home</a>
+                <a class="nav-link" href="/admin"><i class="fas fa-cog"></i> Admin</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container my-4">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="text-center mb-4">
+                    <h2><i class="fas fa-camera text-primary"></i> QR Camera Scanner</h2>
+                    <p class="text-muted">Simple camera-based QR code scanning</p>
+                </div>
+
+                <!-- Camera Scanner -->
+                <div class="scanner-box mb-4">
+                    <div id="status" class="alert alert-info text-center">
+                        <i class="fas fa-info-circle"></i> Click "Start Camera" to begin scanning
+                    </div>
+                    
+                    <div class="text-center">
+                        <div class="qr-overlay">
+                            <video id="video" autoplay muted playsinline></video>
+                            <div id="qr-frame" class="qr-frame" style="display: none;"></div>
+                        </div>
+                        <canvas id="canvas"></canvas>
+                    </div>
+                    
+                    <div class="text-center mt-3">
+                        <button id="start-btn" class="btn btn-success btn-lg me-2">
+                            <i class="fas fa-play"></i> Start Camera
+                        </button>
+                        <button id="stop-btn" class="btn btn-danger btn-lg" style="display: none;">
+                            <i class="fas fa-stop"></i> Stop Camera
+                        </button>
+                        <button id="capture-btn" class="btn btn-info btn-lg ms-2" style="display: none;">
+                            <i class="fas fa-camera"></i> Capture & Scan
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Manual Entry -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5><i class="fas fa-keyboard"></i> Manual Entry</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <textarea id="manual-input" class="form-control" rows="3" 
+                                    placeholder='Paste QR code data: {"token":"abc123..."}'></textarea>
+                            </div>
+                            <div class="col-md-4">
+                                <button id="manual-validate" class="btn btn-primary w-100">
+                                    <i class="fas fa-check"></i> Validate
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Test QR Codes -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5><i class="fas fa-qrcode"></i> Test QR Codes</h5>
+                    </div>
+                    <div class="card-body" id="test-codes">
+                        <p class="text-center">Loading test QR codes...</p>
+                    </div>
+                </div>
+
+                <!-- Result Display -->
+                <div id="result" style="display: none;"></div>
+
+                <!-- Statistics -->
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="card text-center bg-success text-white">
+                            <div class="card-body">
+                                <h4 id="success-count">0</h4>
+                                <p class="mb-0">Success</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center bg-danger text-white">
+                            <div class="card-body">
+                                <h4 id="error-count">0</h4>
+                                <p class="mb-0">Failed</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center bg-warning text-white">
+                            <div class="card-body">
+                                <h4 id="duplicate-count">0</h4>
+                                <p class="mb-0">Duplicate</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center bg-primary text-white">
+                            <div class="card-body">
+                                <h4 id="total-count">0</h4>
+                                <p class="mb-0">Total</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- QR Scanner Library - Alternative approach -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+    
+    <script>
+        // Global variables
+        let video = null;
+        let canvas = null;
+        let context = null;
+        let stream = null;
+        let isScanning = false;
+        let scanInterval = null;
+
+        const stats = {
+            success: 0,
+            error: 0,
+            duplicate: 0,
+            total: 0
+        };
+
+        // Initialize when page loads
+        window.addEventListener('load', function() {
+            console.log('QR Scanner loaded');
+            
+            video = document.getElementById('video');
+            canvas = document.getElementById('canvas');
+            context = canvas.getContext('2d');
+            
+            // Set up event listeners
+            document.getElementById('start-btn').addEventListener('click', startCamera);
+            document.getElementById('stop-btn').addEventListener('click', stopCamera);
+            document.getElementById('capture-btn').addEventListener('click', captureAndScan);
+            document.getElementById('manual-validate').addEventListener('click', validateManual);
+            
+            loadTestQRCodes();
+        });
+
+        async function startCamera() {
+            try {
+                updateStatus('Starting camera...', 'warning');
+                
+                const constraints = {
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                };
+
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                
+                video.addEventListener('loadedmetadata', () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    
+                    isScanning = true;
+                    updateStatus('Camera active - Point at QR codes', 'success');
+                    
+                    document.getElementById('start-btn').style.display = 'none';
+                    document.getElementById('stop-btn').style.display = 'inline-block';
+                    document.getElementById('capture-btn').style.display = 'inline-block';
+                    document.getElementById('qr-frame').style.display = 'block';
+                    
+                    // Start continuous scanning
+                    startContinuousScanning();
+                });
+
+            } catch (error) {
+                console.error('Camera error:', error);
+                handleCameraError(error);
+            }
+        }
+
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            
+            if (scanInterval) {
+                clearInterval(scanInterval);
+                scanInterval = null;
+            }
+            
+            video.srcObject = null;
+            isScanning = false;
+            
+            document.getElementById('start-btn').style.display = 'inline-block';
+            document.getElementById('stop-btn').style.display = 'none';
+            document.getElementById('capture-btn').style.display = 'none';
+            document.getElementById('qr-frame').style.display = 'none';
+            
+            updateStatus('Camera stopped', 'info');
+        }
+
+        function startContinuousScanning() {
+            if (typeof jsQR === 'undefined') {
+                console.error('jsQR library not loaded');
+                updateStatus('QR scanner library not loaded. Use manual entry or capture button.', 'warning');
+                return;
+            }
+            
+            scanInterval = setInterval(() => {
+                if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                    scanForQRCode();
+                }
+            }, 250); // Scan every 250ms
+        }
+
+        function captureAndScan() {
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                scanForQRCode();
+            } else {
+                updateStatus('Camera not ready. Please wait...', 'warning');
+            }
+        }
+
+        function scanForQRCode() {
+            if (!isScanning || !video || !canvas || !context) return;
+            
+            try {
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                
+                if (typeof jsQR !== 'undefined') {
+                    const code = jsQR(imageData.data, imageData.width, imageData.height);
+                    
+                    if (code) {
+                        console.log('QR Code found:', code.data);
+                        processQRCode(code.data);
+                        
+                        // Brief pause after successful scan
+                        if (scanInterval) {
+                            clearInterval(scanInterval);
+                            setTimeout(() => {
+                                if (isScanning) startContinuousScanning();
+                            }, 2000);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Scan error:', error);
+            }
+        }
+
+        function handleCameraError(error) {
+            let message = 'Camera error: ';
+            
+            if (error.name === 'NotAllowedError') {
+                message += 'Camera permission denied. Please allow camera access and try again.';
+            } else if (error.name === 'NotFoundError') {
+                message += 'No camera found on this device.';
+            } else if (error.name === 'NotReadableError') {
+                message += 'Camera is in use by another application.';
+            } else {
+                message += error.message || 'Unknown error occurred.';
+            }
+            
+            updateStatus(message, 'danger');
+        }
+
+        function updateStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            const icon = type === 'success' ? 'check' : 
+                        type === 'warning' ? 'exclamation-triangle' : 
+                        type === 'danger' ? 'times' : 'info-circle';
+            
+            statusDiv.innerHTML = `<i class="fas fa-${icon}"></i> ${message}`;
+            statusDiv.className = `alert alert-${type} text-center`;
+        }
+
+        function validateManual() {
+            const qrData = document.getElementById('manual-input').value.trim();
+            if (!qrData) {
+                showResult({ success: false, message: 'Please enter QR code data' });
+                return;
+            }
+            processQRCode(qrData);
+            document.getElementById('manual-input').value = '';
+        }
+
+        async function processQRCode(qrData) {
+            try {
+                const response = await fetch('/validate-qr', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ qrData: qrData })
+                });
+
+                const result = await response.json();
+                showResult(result);
+                updateStats(result);
+
+            } catch (error) {
+                console.error('Validation error:', error);
+                const result = { success: false, message: 'Network error: ' + error.message };
+                showResult(result);
+                updateStats(result);
+            }
+        }
+
+        function showResult(result) {
+            const resultDiv = document.getElementById('result');
+            const responseTime = result.responseTime ? ` (${result.responseTime}ms)` : '';
+            
+            if (result.success) {
+                resultDiv.innerHTML = `
+                    <div class="alert alert-success alert-dismissible fade show">
+                        <h4><i class="fas fa-check-circle"></i> ${result.message}</h4>
+                        <h5 class="text-success">${result.attendee.name}</h5>
+                        <p class="mb-1"><strong>Ticket:</strong> ${result.attendee.ticketId}</p>
+                        <p class="mb-1"><strong>Time:</strong> ${new Date().toLocaleTimeString()}</p>
+                        <small class="text-muted">${result.details}${responseTime}</small>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                `;
+                
+                // Play success sound
+                playSound('success');
+                
+                // Flash green background
+                flashBackground('success');
+                
+            } else {
+                resultDiv.innerHTML = `
+                    <div class="alert alert-danger alert-dismissible fade show">
+                        <h4><i class="fas fa-times-circle"></i> ${result.message}</h4>
+                        <p class="mb-1">${result.details}</p>
+                        ${result.attendee ? `<small class="text-muted">Previous scan: ${result.attendee.name} - ${result.attendee.ticketId}</small>` : ''}
+                        <small class="d-block text-muted">Time: ${new Date().toLocaleTimeString()}${responseTime}</small>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                `;
+                
+                // Play error sound
+                playSound('error');
+                
+                // Flash red background
+                flashBackground('error');
+            }
+            
+            resultDiv.style.display = 'block';
+            
+            // Auto-hide after 4 seconds (faster than before)
+            setTimeout(() => {
+                const alert = resultDiv.querySelector('.alert');
+                if (alert) {
+                    alert.classList.remove('show');
+                    setTimeout(() => {
+                        resultDiv.style.display = 'none';
+                    }, 150);
+                }
+            }, 4000);
+        }
+
+        function playSound(type) {
+            // Create audio context for web audio API
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                if (type === 'success') {
+                    // Success sound: higher pitched beep
+                    oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+                    oscillator.frequency.setValueAtTime(1000, audioContext.currentTime + 0.1);
+                    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+                    oscillator.start(audioContext.currentTime);
+                    oscillator.stop(audioContext.currentTime + 0.3);
+                } else {
+                    // Error sound: lower pitched buzz
+                    oscillator.frequency.setValueAtTime(300, audioContext.currentTime);
+                    oscillator.frequency.setValueAtTime(250, audioContext.currentTime + 0.1);
+                    oscillator.type = 'sawtooth';
+                    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                    oscillator.start(audioContext.currentTime);
+                    oscillator.stop(audioContext.currentTime + 0.5);
+                }
+            } catch (error) {
+                console.log('Audio not supported:', error);
+            }
+        }
+
+        function flashBackground(type) {
+            const body = document.body;
+            const originalClass = body.className;
+            
+            if (type === 'success') {
+                body.style.background = 'linear-gradient(135deg, #28a745, #20c997)';
+            } else {
+                body.style.background = 'linear-gradient(135deg, #dc3545, #fd7e14)';
+            }
+            
+            setTimeout(() => {
+                body.style.background = '';
+                body.className = originalClass;
+            }, 300);
+        }
+
+        function updateStats(result) {
+            stats.total++;
+            
+            if (result.success) {
+                stats.success++;
+            } else if (result.message && result.message.includes('already')) {
+                stats.duplicate++;
+            } else {
+                stats.error++;
+            }
+            
+            document.getElementById('success-count').textContent = stats.success;
+            document.getElementById('error-count').textContent = stats.error;
+            document.getElementById('duplicate-count').textContent = stats.duplicate;
+            document.getElementById('total-count').textContent = stats.total;
+        }
+
+        function copyQRData(qrData) {
+            document.getElementById('manual-input').value = qrData;
+            showResult({ success: false, message: 'QR data copied. Click Validate to test.' });
+        }
+
+        function loadTestQRCodes() {
+            fetch('/admin/attendees')
+                .then(response => response.json())
+                .then(attendees => {
+                    const container = document.getElementById('test-codes');
+                    
+                    if (attendees.length === 0) {
+                        container.innerHTML = '<p class="text-center">No test data. <a href="/">Upload Excel file first</a></p>';
+                        return;
+                    }
+
+                    let html = '<div class="row">';
+                    attendees.slice(0, 3).forEach(attendee => {
+                        const qrData = JSON.stringify({ token: attendee.qr_token });
+                        html += `
+                            <div class="col-md-4 text-center mb-3">
+                                <h6>${attendee.name}</h6>
+                                <p class="small">${attendee.ticket_id}</p>
+                                <img src="/qr/${attendee.qr_code_path}" style="width: 150px;" class="mb-2">
+                                <br>
+                                <button class="btn btn-sm btn-outline-primary" onclick="copyQRData('${qrData.replace(/'/g, "\\'")}')">
+                                    Copy Data
+                                </button>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                    container.innerHTML = html;
+                })
+                .catch(err => {
+                    document.getElementById('test-codes').innerHTML = '<p class="text-danger text-center">Error loading test data</p>';
+                });
+        }
+
+        // Cleanup
+        window.addEventListener('beforeunload', () => {
+            if (isScanning) {
+                stopCamera();
+            }
+        });
+    </script>
+</body>
+</html>

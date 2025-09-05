@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Camera Scanner - Event System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
+    <style>
+        #reader {
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+        }
+        .scanner-container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .result-success {
+            background: linear-gradient(45deg, #28a745, #20c997);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .result-error {
+            background: linear-gradient(45deg, #dc3545, #fd7e14);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .scanner-status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            text-align: center;
+        }
+        .status-active {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .status-inactive {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .stats-card {
+            transition: transform 0.2s;
+        }
+        .stats-card:hover {
+            transform: translateY(-2px);
+        }
+        #qr-reader__scan_region {
+            border: 3px solid #007bff !important;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/"><i class="fas fa-qrcode"></i> QR Event System</a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/"><i class="fas fa-home"></i> Home</a>
+                <a class="nav-link" href="/admin"><i class="fas fa-cog"></i> Admin</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container my-4">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <!-- Header -->
+                <div class="text-center mb-4">
+                    <h2><i class="fas fa-camera text-primary"></i> QR Camera Scanner</h2>
+                    <p class="text-muted">Point your camera at QR codes to scan automatically</p>
+                </div>
+
+                <!-- Camera Scanner Section -->
+                <div class="scanner-container mb-4">
+                    <div id="scanner-status" class="scanner-status status-inactive">
+                        <i class="fas fa-info-circle"></i> Click "Start Camera" to begin scanning
+                    </div>
+                    
+                    <div id="reader"></div>
+                    
+                    <div class="text-center mt-3">
+                        <button id="start-btn" class="btn btn-success btn-lg me-2">
+                            <i class="fas fa-play"></i> Start Camera
+                        </button>
+                        <button id="stop-btn" class="btn btn-danger btn-lg" style="display: none;">
+                            <i class="fas fa-stop"></i> Stop Camera
+                        </button>
+                        <button id="switch-camera-btn" class="btn btn-info btn-lg ms-2" style="display: none;">
+                            <i class="fas fa-sync"></i> Switch Camera
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Result Display -->
+                <div id="scan-result" style="display: none;"></div>
+
+                <!-- Instructions -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5><i class="fas fa-info"></i> How to Scan</h5>
+                    </div>
+                    <div class="card-body">
+                        <ol>
+                            <li>Click "Start Camera" to activate your device camera</li>
+                            <li>Allow camera permissions when prompted</li>
+                            <li>Point your camera at a QR code</li>
+                            <li>The system will automatically detect and validate the QR code</li>
+                            <li>You'll see immediate feedback for each scan</li>
+                        </ol>
+                        <div class="alert alert-info">
+                            <i class="fas fa-lightbulb"></i> 
+                            <strong>Tips:</strong> Hold your device steady, ensure good lighting, and keep the QR code within the scanning area.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Statistics -->
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <div class="card text-center bg-success text-white stats-card">
+                            <div class="card-body">
+                                <i class="fas fa-check-circle fa-2x mb-2"></i>
+                                <h4 id="success-count">0</h4>
+                                <p class="mb-0">Successful Scans</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card text-center bg-danger text-white stats-card">
+                            <div class="card-body">
+                                <i class="fas fa-times-circle fa-2x mb-2"></i>
+                                <h4 id="error-count">0</h4>
+                                <p class="mb-0">Failed Scans</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card text-center bg-warning text-white stats-card">
+                            <div class="card-body">
+                                <i class="fas fa-exclamation-circle fa-2x mb-2"></i>
+                                <h4 id="duplicate-count">0</h4>
+                                <p class="mb-0">Already Used</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card text-center bg-primary text-white stats-card">
+                            <div class="card-body">
+                                <i class="fas fa-list fa-2x mb-2"></i>
+                                <h4 id="total-count">0</h4>
+                                <p class="mb-0">Total Attempts</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Manual Backup -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-keyboard"></i> Manual Backup (if camera doesn't work)</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <textarea id="manual-input" class="form-control" rows="2" 
+                                    placeholder='Paste QR code data here as backup'></textarea>
+                            </div>
+                            <div class="col-md-4">
+                                <button id="manual-validate" class="btn btn-outline-primary w-100">
+                                    <i class="fas fa-check"></i> Validate Manually
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let html5QrcodeScanner = null;
+        let isScanning = false;
+        let currentCameraIndex = 0;
+        let availableCameras = [];
+        
+        const stats = {
+            success: 0,
+            error: 0,
+            duplicate: 0,
+            total: 0
+        };
+
+        // Get DOM elements
+        const startBtn = document.getElementById('start-btn');
+        const stopBtn = document.getElementById('stop-btn');
+        const switchCameraBtn = document.getElementById('switch-camera-btn');
+        const scannerStatus = document.getElementById('scanner-status');
+        const scanResult = document.getElementById('scan-result');
+        const manualInput = document.getElementById('manual-input');
+        const manualValidate = document.getElementById('manual-validate');
+
+        // Event listeners
+        startBtn.addEventListener('click', startScanning);
+        stopBtn.addEventListener('click', stopScanning);
+        switchCameraBtn.addEventListener('click', switchCamera);
+        manualValidate.addEventListener('click', validateManually);
+
+        async function startScanning() {
+            try {
+                updateStatus('Initializing camera...', 'status-inactive');
+                
+                // Get available cameras
+                const devices = await Html5Qrcode.getCameras();
+                availableCameras = devices;
+                
+                if (devices && devices.length > 0) {
+                    html5QrcodeScanner = new Html5Qrcode("reader");
+                    
+                    const config = {
+                        fps: 10,
+                        qrbox: { width: 250, height: 250 },
+                        aspectRatio: 1.0
+                    };
+
+                    // Try to use back camera first, then front camera
+                    let cameraId = devices[currentCameraIndex].id;
+                    
+                    await html5QrcodeScanner.start(
+                        cameraId,
+                        config,
+                        onScanSuccess,
+                        onScanFailure
+                    );
+
+                    isScanning = true;
+                    updateStatus('Camera active - Point at QR code to scan', 'status-active');
+                    
+                    startBtn.style.display = 'none';
+                    stopBtn.style.display = 'inline-block';
+                    
+                    if (devices.length > 1) {
+                        switchCameraBtn.style.display = 'inline-block';
+                    }
+                    
+                } else {
+                    updateStatus('No cameras found on this device', 'status-inactive');
+                }
+                
+            } catch (error) {
+                console.error('Camera start error:', error);
+                let errorMessage = 'Camera access failed: ';
+                
+                if (error.name === 'NotAllowedError') {
+                    errorMessage += 'Please allow camera permissions and try again.';
+                } else if (error.name === 'NotFoundError') {
+                    errorMessage += 'No camera found on this device.';
+                } else if (error.name === 'NotReadableError') {
+                    errorMessage += 'Camera is being used by another application.';
+                } else {
+                    errorMessage += error.message || 'Unknown error occurred.';
+                }
+                
+                updateStatus(errorMessage, 'status-inactive');
+            }
+        }
+
+        async function stopScanning() {
+            if (html5QrcodeScanner && isScanning) {
+                try {
+                    await html5QrcodeScanner.stop();
+                    html5QrcodeScanner = null;
+                    isScanning = false;
+                    
+                    updateStatus('Camera stopped. Click "Start Camera" to scan again.', 'status-inactive');
+                    
+                    startBtn.style.display = 'inline-block';
+                    stopBtn.style.display = 'none';
+                    switchCameraBtn.style.display = 'none';
+                    
+                } catch (error) {
+                    console.error('Error stopping camera:', error);
+                    updateStatus('Error stopping camera: ' + error.message, 'status-inactive');
+                }
+            }
+        }
+
+        async function switchCamera() {
+            if (availableCameras.length <= 1) return;
+            
+            currentCameraIndex = (currentCameraIndex + 1) % availableCameras.length;
+            
+            if (isScanning) {
+                await stopScanning();
+                setTimeout(startScanning, 500); // Small delay before restarting
+            }
+        }
+
+        function onScanSuccess(decodedText, decodedResult) {
+            console.log('QR Code scanned:', decodedText);
+            processQRCode(decodedText);
+        }
+
+        function onScanFailure(error) {
+            // Ignore scan failures - they happen when no QR code is visible
+        }
+
+        async function processQRCode(qrData) {
+            try {
+                const response = await fetch('/validate-qr', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ qrData: qrData })
+                });
+
+                const result = await response.json();
+                displayScanResult(result);
+                updateStats(result);
+                
+            } catch (error) {
+                console.error('Validation error:', error);
+                displayScanResult({
+                    success: false,
+                    message: 'Network error: ' + error.message
+                });
+                updateStats({ success: false });
+            }
+        }
+
+        function validateManually() {
+            const qrData = manualInput.value.trim();
+            if (!qrData) {
+                alert('Please enter QR code data');
+                return;
+            }
+            processQRCode(qrData);
+            manualInput.value = '';
+        }
+
+        function displayScanResult(result) {
+            const resultDiv = scanResult;
+            
+            if (result.success) {
+                resultDiv.innerHTML = `
+                    <div class="result-success">
+                        <i class="fas fa-check-circle fa-3x mb-3"></i>
+                        <h4>Welcome!</h4>
+                        <h5>${result.attendee.name}</h5>
+                        <p>Ticket ID: ${result.attendee.ticketId}</p>
+                        <small>Scanned at: ${new Date().toLocaleTimeString()}</small>
+                    </div>
+                `;
+            } else {
+                resultDiv.innerHTML = `
+                    <div class="result-error">
+                        <i class="fas fa-times-circle fa-3x mb-3"></i>
+                        <h4>Scan Failed</h4>
+                        <p>${result.message}</p>
+                        <small>Time: ${new Date().toLocaleTimeString()}</small>
+                    </div>
+                `;
+            }
+            
+            resultDiv.style.display = 'block';
+            
+            // Auto-hide result after 5 seconds
+            setTimeout(() => {
+                resultDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        function updateStats(result) {
+            stats.total++;
+            
+            if (result.success) {
+                stats.success++;
+            } else if (result.message && result.message.includes('already')) {
+                stats.duplicate++;
+            } else {
+                stats.error++;
+            }
+            
+            document.getElementById('success-count').textContent = stats.success;
+            document.getElementById('error-count').textContent = stats.error;
+            document.getElementById('duplicate-count').textContent = stats.duplicate;
+            document.getElementById('total-count').textContent = stats.total;
+        }
+
+        function updateStatus(message, className) {
+            scannerStatus.textContent = message;
+            scannerStatus.className = 'scanner-status ' + className;
+        }
+
+        // Initialize on page load
+        window.addEventListener('load', function() {
+            console.log('QR Camera Scanner loaded');
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            if (isScanning) {
+                stopScanning();
+            }
+        });
+    </script>
+</body>
+</html>

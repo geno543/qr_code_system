@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - QR Event System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/"><i class="fas fa-qrcode"></i> QR Event System</a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/"><i class="fas fa-home"></i> Home</a>
+                <a class="nav-link" href="/scanner"><i class="fas fa-camera"></i> Scanner</a>
+                <a class="nav-link active" href="/admin"><i class="fas fa-cog"></i> Admin</a>
+                <button class="btn btn-outline-light btn-sm ms-2" onclick="logout()">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container my-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="fas fa-users-cog"></i> Admin Dashboard</h2>
+            <button class="btn btn-success" onclick="loadAttendees()">
+                <i class="fas fa-sync"></i> Refresh
+            </button>
+        </div>
+
+        <!-- Statistics -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card text-center bg-primary text-white">
+                    <div class="card-body">
+                        <h4 id="total-count">0</h4>
+                        <p class="mb-0">Total Attendees</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center bg-success text-white">
+                    <div class="card-body">
+                        <h4 id="scanned-count">0</h4>
+                        <p class="mb-0">Scanned</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center bg-info text-white">
+                    <div class="card-body">
+                        <h4 id="pending-count">0</h4>
+                        <p class="mb-0">Pending</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center bg-warning text-white">
+                    <div class="card-body">
+                        <h4 id="percentage">0%</h4>
+                        <p class="mb-0">Attendance Rate</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upload Section -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5><i class="fas fa-upload"></i> Upload New Data</h5>
+            </div>
+            <div class="card-body">
+                <form id="upload-form" enctype="multipart/form-data">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <input type="file" class="form-control" id="excel-file" accept=".xlsx,.xls,.csv" required>
+                            <div class="form-text">
+                                Upload Excel file with columns: <strong>Name</strong>, <strong>Ticket_ID</strong>, <strong>Email</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fas fa-upload"></i> Upload & Generate QR
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Search and Filter -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6><i class="fas fa-search"></i> Search & Actions</h6>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <input type="text" class="form-control" id="search-input" placeholder="Search by name, ticket ID, or email..." oninput="filterAttendees()">
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-select" id="status-filter" onchange="filterAttendees()">
+                            <option value="">All Status</option>
+                            <option value="scanned">Scanned Only</option>
+                            <option value="pending">Pending Only</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-select" id="sort-filter" onchange="filterAttendees()">
+                            <option value="name">Sort by Name</option>
+                            <option value="ticket_id">Sort by Ticket ID</option>
+                            <option value="created_at">Sort by Date Added</option>
+                            <option value="scan_time">Sort by Scan Time</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-2">
+                        <button class="btn btn-success w-100" onclick="resetAllScans()">
+                            <i class="fas fa-undo"></i> Reset All Scans
+                        </button>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-danger w-100" onclick="clearAllData()">
+                            <i class="fas fa-trash"></i> Delete All
+                        </button>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-info w-100" onclick="exportData()">
+                            <i class="fas fa-download"></i> Export CSV
+                        </button>
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-warning w-100" onclick="downloadQRCodes()">
+                            <i class="fas fa-images"></i> Download QR Codes
+                        </button>
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-secondary w-100" onclick="bulkActions()">
+                            <i class="fas fa-check-square"></i> Bulk Actions
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Attendees Table -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-table"></i> Attendees</h5>
+            </div>
+            <div class="card-body">
+                <div id="loading" class="text-center py-4">
+                    <i class="fas fa-spinner fa-spin"></i> Loading...
+                </div>
+                <div id="content" style="display: none;">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>
+                                        <input type="checkbox" id="select-all" onchange="toggleSelectAll()">
+                                    </th>
+                                    <th>Name</th>
+                                    <th>Ticket ID</th>
+                                    <th>Email</th>
+                                    <th>Status</th>
+                                    <th>Scan Time</th>
+                                    <th>QR Code</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="attendees-table">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div id="error" style="display: none;" class="alert alert-danger">
+                    Error loading data. <button class="btn btn-sm btn-outline-danger" onclick="loadAttendees()">Retry</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        console.log('Admin dashboard loaded');
+        
+        let allAttendees = [];
+        let filteredAttendees = [];
+        let authToken = null;
+        
+        // Load attendees when page loads
+        window.addEventListener('load', function() {
+            console.log('Page loaded, checking authentication');
+            checkAuthentication();
+        });
+
+        function checkAuthentication() {
+            // Get token from localStorage
+            authToken = localStorage.getItem('adminSession');
+            
+            if (!authToken) {
+                console.log('No token found, redirecting to login');
+                window.location.href = '/admin/login';
+                return;
+            }
+            
+            console.log('Token found, verifying...');
+            // Verify token and load data
+            verifyTokenAndLoad();
+        }
+
+        async function verifyTokenAndLoad() {
+            try {
+                const response = await fetch('/admin/verify', {
+                    headers: {
+                        'Authorization': 'Bearer ' + authToken
+                    }
+                });
+                
+                if (response.ok) {
+                    console.log('Token verified, loading attendees');
+                    loadAttendees();
+                } else {
+                    console.log('Token invalid, redirecting to login');
+                    // Token invalid, redirect to login
+                    localStorage.removeItem('adminSession');
+                    window.location.href = '/admin/login';
+                }
+            } catch (error) {
+                console.error('Auth verification failed:', error);
+                localStorage.removeItem('adminSession');
+                window.location.href = '/admin/login';
+            }
+        }
+
+        function getAuthHeaders() {
+            return {
+                'Authorization': 'Bearer ' + authToken,
+                'Content-Type': 'application/json'
+            };
+        }
+
+        async function logout() {
+            try {
+                await fetch('/admin/logout', {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                });
+            } catch (error) {
+                console.error('Logout error:', error);
+            } finally {
+                localStorage.removeItem('adminSession');
+                window.location.href = '/admin/login';
+            }
+        }
+
+        async function loadAttendees() {
+            console.log('Loading attendees...');
+            
+            // Show loading state
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('content').style.display = 'none';
+            document.getElementById('error').style.display = 'none';
+            
+            try {
+                const response = await fetch('/admin/attendees', {
+                    headers: getAuthHeaders()
+                });
+                console.log('API response status:', response.status);
+                
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        localStorage.removeItem('adminSession');
+                        window.location.href = '/admin/login';
+                        return;
+                    }
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                allAttendees = await response.json();
+                filteredAttendees = [...allAttendees];
+                console.log('Loaded attendees:', allAttendees.length);
+                
+                updateStatistics(allAttendees);
+                filterAttendees();
+                
+                // Show content
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('content').style.display = 'block';
+                
+            } catch (error) {
+                console.error('Error loading attendees:', error);
+                
+                // Show error
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('error').innerHTML = `
+                    <strong>Error:</strong> ${error.message} 
+                    <button class="btn btn-sm btn-outline-danger ms-2" onclick="loadAttendees()">Retry</button>
+                `;
+            }
+        }
+
+        function updateStatistics(attendees) {
+            const total = attendees.length;
+            const scanned = attendees.filter(a => a.is_scanned).length;
+            const pending = total - scanned;
+            const percentage = total > 0 ? Math.round((scanned / total) * 100) : 0;
+
+            document.getElementById('total-count').textContent = total;
+            document.getElementById('scanned-count').textContent = scanned;
+            document.getElementById('pending-count').textContent = pending;
+            document.getElementById('percentage').textContent = percentage + '%';
+        }
+
+        function filterAttendees() {
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+            const statusFilter = document.getElementById('status-filter').value;
+            const sortBy = document.getElementById('sort-filter').value;
+
+            // Filter attendees
+            filteredAttendees = allAttendees.filter(attendee => {
+                const matchesSearch = !searchTerm || 
+                    attendee.name.toLowerCase().includes(searchTerm) ||
+                    attendee.ticket_id.toLowerCase().includes(searchTerm) ||
+                    (attendee.email && attendee.email.toLowerCase().includes(searchTerm));
+
+                const matchesStatus = !statusFilter || 
+                    (statusFilter === 'scanned' && attendee.is_scanned) ||
+                    (statusFilter === 'pending' && !attendee.is_scanned);
+
+                return matchesSearch && matchesStatus;
+            });
+
+            // Sort attendees
+            filteredAttendees.sort((a, b) => {
+                if (sortBy === 'name') return a.name.localeCompare(b.name);
+                if (sortBy === 'ticket_id') return a.ticket_id.localeCompare(b.ticket_id);
+                if (sortBy === 'created_at') return new Date(b.created_at) - new Date(a.created_at);
+                if (sortBy === 'scan_time') {
+                    if (!a.scan_time && !b.scan_time) return 0;
+                    if (!a.scan_time) return 1;
+                    if (!b.scan_time) return -1;
+                    return new Date(b.scan_time) - new Date(a.scan_time);
+                }
+                return 0;
+            });
+
+            renderAttendees(filteredAttendees);
+        }
+
+        function renderAttendees(attendees) {
+            const tbody = document.getElementById('attendees-table');
+            
+            if (attendees.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="text-center py-4">
+                            <i class="fas fa-users"></i> No attendees found matching your criteria.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = attendees.map(attendee => `
+                <tr id="row-${attendee.id}">
+                    <td>
+                        <input type="checkbox" class="attendee-checkbox" value="${attendee.id}">
+                    </td>
+                    <td>
+                        <strong>${attendee.name}</strong>
+                        <br><small class="text-muted">ID: ${attendee.id}</small>
+                    </td>
+                    <td><code>${attendee.ticket_id}</code></td>
+                    <td>${attendee.email || '<span class="text-muted">No email</span>'}</td>
+                    <td>
+                        ${attendee.is_scanned ? 
+                            '<span class="badge bg-success"><i class="fas fa-check"></i> Scanned</span>' :
+                            '<span class="badge bg-warning"><i class="fas fa-clock"></i> Pending</span>'
+                        }
+                        <br>
+                        <button class="btn btn-sm btn-outline-${attendee.is_scanned ? 'warning' : 'success'} mt-1" 
+                                onclick="toggleScanStatus(${attendee.id}, ${!attendee.is_scanned})">
+                            <i class="fas fa-${attendee.is_scanned ? 'undo' : 'check'}"></i>
+                            ${attendee.is_scanned ? 'Unmark' : 'Mark Scanned'}
+                        </button>
+                    </td>
+                    <td>
+                        ${attendee.scan_time ? 
+                            `<small>${new Date(attendee.scan_time).toLocaleString()}</small>` :
+                            '<span class="text-muted">Not scanned</span>'
+                        }
+                    </td>
+                    <td>
+                        ${attendee.qr_code_path ? 
+                            `<img src="/qr/${attendee.qr_code_path}" style="width: 50px; height: 50px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;" alt="QR Code" onclick="viewQRCode('${attendee.qr_code_path}', '${attendee.name}')">` :
+                            '<i class="fas fa-exclamation-triangle text-warning" title="QR code not generated"></i>'
+                        }
+                    </td>
+                    <td>
+                        <div class="btn-group" role="group">
+                            <button class="btn btn-sm btn-outline-primary" onclick="editAttendee(${attendee.id})" title="Edit">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteAttendee(${attendee.id})" title="Delete">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Toggle select all checkboxes
+        function toggleSelectAll() {
+            const selectAll = document.getElementById('select-all');
+            const checkboxes = document.querySelectorAll('.attendee-checkbox');
+            checkboxes.forEach(cb => cb.checked = selectAll.checked);
+        }
+
+        // Get selected attendee IDs
+        function getSelectedAttendees() {
+            return Array.from(document.querySelectorAll('.attendee-checkbox:checked')).map(cb => cb.value);
+        }
+
+        // Toggle scan status for individual attendee
+        async function toggleScanStatus(id, newStatus) {
+            try {
+                const response = await fetch(`/admin/attendees/${id}`, {
+                    method: 'PUT',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ 
+                        is_scanned: newStatus, 
+                        scan_time: newStatus ? new Date().toISOString() : null 
+                    })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    await loadAttendees(); // Refresh data
+                    alert(`Attendee scan status ${newStatus ? 'marked as scanned' : 'unmarked'}`);
+                } else {
+                    alert('Failed to update scan status');
+                }
+            } catch (error) {
+                console.error('Error updating scan status:', error);
+                alert('Error updating scan status');
+            }
+        }
+
+        // Edit attendee
+        function editAttendee(id) {
+            const attendee = allAttendees.find(a => a.id === id);
+            if (!attendee) return;
+
+            const newName = prompt('Enter new name:', attendee.name);
+            if (newName === null) return;
+
+            const newTicketId = prompt('Enter new Ticket ID:', attendee.ticket_id);
+            if (newTicketId === null) return;
+
+            const newEmail = prompt('Enter new email:', attendee.email || '');
+
+            updateAttendee(id, newName, newTicketId, newEmail);
+        }
+
+        // Update attendee
+        async function updateAttendee(id, name, ticket_id, email) {
+            try {
+                const response = await fetch(`/admin/attendees/${id}`, {
+                    method: 'PUT',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ name, ticket_id, email })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    await loadAttendees();
+                    alert('Attendee updated successfully');
+                } else {
+                    alert(result.message || 'Failed to update attendee');
+                }
+            } catch (error) {
+                console.error('Error updating attendee:', error);
+                alert('Error updating attendee');
+            }
+        }
+
+        // Delete individual attendee
+        async function deleteAttendee(id) {
+            const attendee = allAttendees.find(a => a.id === id);
+            if (!attendee) return;
+
+            if (!confirm(`Are you sure you want to delete ${attendee.name}?`)) return;
+
+            try {
+                const response = await fetch(`/admin/attendees/${id}`, {
+                    method: 'DELETE',
+                    headers: getAuthHeaders()
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    await loadAttendees();
+                    alert('Attendee deleted successfully');
+                } else {
+                    alert(result.message || 'Failed to delete attendee');
+                }
+            } catch (error) {
+                console.error('Error deleting attendee:', error);
+                alert('Error deleting attendee');
+            }
+        }
+
+        // Reset all scan status
+        async function resetAllScans() {
+            if (!confirm('Are you sure you want to reset ALL scan statuses? This will mark all attendees as not scanned.')) return;
+
+            try {
+                const response = await fetch('/admin/reset-scans', {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    await loadAttendees();
+                    alert(result.message);
+                } else {
+                    alert(result.message || 'Failed to reset scan status');
+                }
+            } catch (error) {
+                console.error('Error resetting scans:', error);
+                alert('Error resetting scan status');
+            }
+        }
+
+        // Clear all data
+        async function clearAllData() {
+            if (!confirm('⚠️ WARNING: This will DELETE ALL attendees and QR codes permanently!\n\nType "DELETE ALL" to confirm:')) return;
+
+            const confirmation = prompt('Type "DELETE ALL" to confirm deletion:');
+            if (confirmation !== 'DELETE ALL') {
+                alert('Deletion cancelled - confirmation text did not match');
+                return;
+            }
+
+            try {
+                const response = await fetch('/admin/clear-all', {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    await loadAttendees();
+                    alert(result.message);
+                } else {
+                    alert(result.message || 'Failed to clear data');
+                }
+            } catch (error) {
+                console.error('Error clearing data:', error);
+                alert('Error clearing data');
+            }
+        }
+
+        // Bulk actions
+        function bulkActions() {
+            const selected = getSelectedAttendees();
+            if (selected.length === 0) {
+                alert('Please select attendees first by checking the boxes');
+                return;
+            }
+
+            const action = prompt(`Selected ${selected.length} attendees.\n\nChoose action:\n1. Mark as scanned\n2. Mark as unscanned\n3. Delete selected\n\nEnter 1, 2, or 3:`);
+            
+            if (action === '1') {
+                bulkUpdateScanStatus(selected, true);
+            } else if (action === '2') {
+                bulkUpdateScanStatus(selected, false);
+            } else if (action === '3') {
+                bulkDelete(selected);
+            }
+        }
+
+        // Bulk update scan status
+        async function bulkUpdateScanStatus(ids, isScanned) {
+            if (!confirm(`Mark ${ids.length} attendees as ${isScanned ? 'scanned' : 'unscanned'}?`)) return;
+
+            for (const id of ids) {
+                try {
+                    await fetch(`/admin/attendees/${id}`, {
+                        method: 'PUT',
+                        headers: getAuthHeaders(),
+                        body: JSON.stringify({ 
+                            is_scanned: isScanned, 
+                            scan_time: isScanned ? new Date().toISOString() : null 
+                        })
+                    });
+                } catch (error) {
+                    console.error(`Error updating attendee ${id}:`, error);
+                }
+            }
+
+            await loadAttendees();
+            alert(`Updated ${ids.length} attendees`);
+        }
+
+        // Bulk delete
+        async function bulkDelete(ids) {
+            if (!confirm(`⚠️ DELETE ${ids.length} attendees permanently?`)) return;
+
+            for (const id of ids) {
+                try {
+                    await fetch(`/admin/attendees/${id}`, {
+                        method: 'DELETE',
+                        headers: getAuthHeaders()
+                    });
+                } catch (error) {
+                    console.error(`Error deleting attendee ${id}:`, error);
+                }
+            }
+
+            await loadAttendees();
+            alert(`Deleted ${ids.length} attendees`);
+        }
+
+        // Export data as CSV
+        function exportData() {
+            if (filteredAttendees.length === 0) {
+                alert('No data to export');
+                return;
+            }
+
+            const csvContent = [
+                ['Name', 'Ticket ID', 'Email', 'Status', 'Scan Time', 'Created At'].join(','),
+                ...filteredAttendees.map(a => [
+                    `"${a.name}"`,
+                    `"${a.ticket_id}"`,
+                    `"${a.email || ''}"`,
+                    a.is_scanned ? 'Scanned' : 'Pending',
+                    `"${a.scan_time || ''}"`,
+                    `"${a.created_at}"`
+                ].join(','))
+            ].join('\n');
+
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `attendees-${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+
+        // File upload
+        document.getElementById('upload-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('excel-file');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select a file');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('excelFile', file);
+
+            try {
+                const button = e.target.querySelector('button[type="submit"]');
+                button.disabled = true;
+                button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert(`Successfully processed ${result.processed} attendees`);
+                    loadAttendees();
+                    fileInput.value = '';
+                } else {
+                    alert(result.message || 'Upload failed');
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                alert('Network error occurred');
+            } finally {
+                const button = e.target.querySelector('button[type="submit"]');
+                button.disabled = false;
+                button.innerHTML = '<i class="fas fa-upload"></i> Upload & Generate QR';
+            }
+        });
+
+        async function downloadQRCodes() {
+            try {
+                const button = event.target;
+                button.disabled = true;
+                button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparing Download...';
+
+                // Check if there are any attendees first
+                const response = await fetch('/admin/attendees');
+                const attendees = await response.json();
+                
+                if (attendees.length === 0) {
+                    alert('No attendees found. Please upload data first.');
+                    return;
+                }
+
+                // Start download
+                window.location.href = '/download/qr-codes';
+                
+                // Show success message
+                setTimeout(() => {
+                    alert('QR codes download started! Check your downloads folder.');
+                }, 1000);
+
+            } catch (error) {
+                console.error('Download error:', error);
+                alert('Failed to download QR codes. Please try again.');
+            } finally {
+                const button = event.target;
+                button.disabled = false;
+                button.innerHTML = '<i class="fas fa-images"></i> Download All QR Codes';
+            }
+        }
+
+        function viewQRCode(qrPath, attendeeName) {
+            // Create modal to view QR code
+            const modal = document.createElement('div');
+            modal.className = 'modal fade';
+            modal.innerHTML = `
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">QR Code - ${attendeeName}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body text-center">
+                            <img src="/qr/${qrPath}" class="img-fluid" style="max-width: 300px;" alt="QR Code">
+                            <div class="mt-3">
+                                <a href="/qr/${qrPath}" download="${attendeeName.replace(/[^a-zA-Z0-9]/g, '_')}_QR.png" class="btn btn-primary">
+                                    <i class="fas fa-download"></i> Download
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            
+            const bsModal = new bootstrap.Modal(modal);
+            bsModal.show();
+            
+            modal.addEventListener('hidden.bs.modal', () => {
+                document.body.removeChild(modal);
+            });
+        }
+    </script>
+</body>
+</html>

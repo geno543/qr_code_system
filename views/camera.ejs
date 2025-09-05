@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Capture - <%= attendee.name %></title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .camera-container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        #video {
+            width: 100%;
+            height: 400px;
+            border-radius: 10px;
+            background: #000;
+        }
+        
+        #canvas {
+            display: none;
+        }
+        
+        .photo-preview {
+            max-width: 100%;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        
+        .capture-controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .attendee-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .photo-actions {
+            display: none;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/"><i class="fas fa-qrcode"></i> QR Event System</a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/"><i class="fas fa-home"></i> Home</a>
+                <a class="nav-link" href="/admin"><i class="fas fa-cog"></i> Admin</a>
+                <a class="nav-link" href="/scanner"><i class="fas fa-camera"></i> Scanner</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container my-4">
+        <div class="camera-container">
+            <!-- Attendee Info -->
+            <div class="attendee-info">
+                <h3><i class="fas fa-user"></i> <%= attendee.name %></h3>
+                <p class="mb-1"><strong>Ticket ID:</strong> <%= attendee.ticket_id %></p>
+                <p class="mb-0"><strong>Email:</strong> <%= attendee.email || 'Not provided' %></p>
+            </div>
+
+            <!-- Camera Section -->
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-camera"></i> Capture Photo</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Video Stream -->
+                    <video id="video" autoplay playsinline></video>
+                    <canvas id="canvas"></canvas>
+                    
+                    <!-- Photo Preview -->
+                    <img id="photoPreview" class="photo-preview" style="display: none;" alt="Captured Photo">
+                    
+                    <!-- Camera Controls -->
+                    <div class="capture-controls">
+                        <button id="startCamera" class="btn btn-primary me-2">
+                            <i class="fas fa-video"></i> Start Camera
+                        </button>
+                        <button id="capturePhoto" class="btn btn-success me-2" disabled>
+                            <i class="fas fa-camera"></i> Capture Photo
+                        </button>
+                        <button id="switchCamera" class="btn btn-secondary" disabled>
+                            <i class="fas fa-camera-rotate"></i> Switch Camera
+                        </button>
+                    </div>
+
+                    <!-- Photo Actions -->
+                    <div id="photoActions" class="photo-actions text-center">
+                        <button id="retakePhoto" class="btn btn-warning me-2">
+                            <i class="fas fa-redo"></i> Retake
+                        </button>
+                        <button id="uploadPhoto" class="btn btn-success me-2">
+                            <i class="fas fa-upload"></i> Save Photo
+                        </button>
+                    </div>
+
+                    <!-- Upload Status -->
+                    <div id="uploadStatus" class="mt-3"></div>
+
+                    <!-- Current Photo -->
+                    <% if (attendee.photo_path) { %>
+                    <div class="mt-3">
+                        <h6>Current Photo:</h6>
+                        <img src="/<%= attendee.photo_path %>" class="img-thumbnail" style="max-width: 200px;" alt="Current Photo">
+                    </div>
+                    <% } %>
+                </div>
+            </div>
+
+            <!-- File Upload Alternative -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6><i class="fas fa-upload"></i> Or Upload from Device</h6>
+                </div>
+                <div class="card-body">
+                    <input type="file" id="fileInput" class="form-control" accept="image/*">
+                    <button id="uploadFile" class="btn btn-primary mt-2">
+                        <i class="fas fa-upload"></i> Upload Selected File
+                    </button>
+                </div>
+            </div>
+
+            <!-- Navigation -->
+            <div class="text-center mt-4">
+                <a href="/admin" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Admin
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const photoPreview = document.getElementById('photoPreview');
+        const startCameraBtn = document.getElementById('startCamera');
+        const capturePhotoBtn = document.getElementById('capturePhoto');
+        const switchCameraBtn = document.getElementById('switchCamera');
+        const retakePhotoBtn = document.getElementById('retakePhoto');
+        const uploadPhotoBtn = document.getElementById('uploadPhoto');
+        const photoActions = document.getElementById('photoActions');
+        const uploadStatus = document.getElementById('uploadStatus');
+        const fileInput = document.getElementById('fileInput');
+        const uploadFileBtn = document.getElementById('uploadFile');
+
+        let currentStream = null;
+        let cameras = [];
+        let currentCameraIndex = 0;
+        let capturedBlob = null;
+
+        // Initialize camera list
+        async function getCameras() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                cameras = devices.filter(device => device.kind === 'videoinput');
+                console.log('Available cameras:', cameras.length);
+            } catch (err) {
+                console.error('Error getting cameras:', err);
+            }
+        }
+
+        // Start camera
+        async function startCamera() {
+            try {
+                if (currentStream) {
+                    currentStream.getTracks().forEach(track => track.stop());
+                }
+
+                const constraints = {
+                    video: {
+                        deviceId: cameras[currentCameraIndex] ? cameras[currentCameraIndex].deviceId : undefined,
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    }
+                };
+
+                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = currentStream;
+
+                startCameraBtn.disabled = true;
+                capturePhotoBtn.disabled = false;
+                switchCameraBtn.disabled = cameras.length <= 1;
+
+                showStatus('Camera started successfully!', 'success');
+            } catch (err) {
+                console.error('Error starting camera:', err);
+                showStatus('Error starting camera. Please check permissions.', 'danger');
+            }
+        }
+
+        // Capture photo
+        function capturePhoto() {
+            const context = canvas.getContext('2d');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            context.drawImage(video, 0, 0);
+            
+            // Convert to blob
+            canvas.toBlob(blob => {
+                capturedBlob = blob;
+                
+                // Show preview
+                const url = URL.createObjectURL(blob);
+                photoPreview.src = url;
+                photoPreview.style.display = 'block';
+                
+                // Hide video, show actions
+                video.style.display = 'none';
+                photoActions.style.display = 'block';
+                capturePhotoBtn.disabled = true;
+            }, 'image/jpeg', 0.8);
+        }
+
+        // Retake photo
+        function retakePhoto() {
+            video.style.display = 'block';
+            photoPreview.style.display = 'none';
+            photoActions.style.display = 'none';
+            capturePhotoBtn.disabled = false;
+            capturedBlob = null;
+        }
+
+        // Upload photo
+        async function uploadPhoto() {
+            if (!capturedBlob) {
+                showStatus('No photo to upload', 'warning');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('photo', capturedBlob, 'photo.jpg');
+
+            try {
+                uploadPhotoBtn.disabled = true;
+                showStatus('Uploading photo...', 'info');
+
+                const response = await fetch(`/upload-photo/<%= attendee.id %>`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showStatus('Photo uploaded successfully!', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/admin';
+                    }, 2000);
+                } else {
+                    showStatus('Error uploading photo: ' + result.error, 'danger');
+                }
+            } catch (err) {
+                console.error('Upload error:', err);
+                showStatus('Error uploading photo', 'danger');
+            } finally {
+                uploadPhotoBtn.disabled = false;
+            }
+        }
+
+        // Switch camera
+        function switchCamera() {
+            currentCameraIndex = (currentCameraIndex + 1) % cameras.length;
+            startCamera();
+        }
+
+        // Upload file
+        async function uploadFile() {
+            const file = fileInput.files[0];
+            if (!file) {
+                showStatus('Please select a file first', 'warning');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('photo', file);
+
+            try {
+                uploadFileBtn.disabled = true;
+                showStatus('Uploading photo...', 'info');
+
+                const response = await fetch(`/upload-photo/<%= attendee.id %>`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showStatus('Photo uploaded successfully!', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/admin';
+                    }, 2000);
+                } else {
+                    showStatus('Error uploading photo: ' + result.error, 'danger');
+                }
+            } catch (err) {
+                console.error('Upload error:', err);
+                showStatus('Error uploading photo', 'danger');
+            } finally {
+                uploadFileBtn.disabled = false;
+            }
+        }
+
+        // Show status message
+        function showStatus(message, type) {
+            uploadStatus.innerHTML = `<div class="alert alert-${type}" role="alert">${message}</div>`;
+        }
+
+        // Event listeners
+        startCameraBtn.addEventListener('click', startCamera);
+        capturePhotoBtn.addEventListener('click', capturePhoto);
+        retakePhotoBtn.addEventListener('click', retakePhoto);
+        uploadPhotoBtn.addEventListener('click', uploadPhoto);
+        switchCameraBtn.addEventListener('click', switchCamera);
+        uploadFileBtn.addEventListener('click', uploadFile);
+
+        // Initialize
+        getCameras().then(() => {
+            if (cameras.length > 0) {
+                startCameraBtn.disabled = false;
+            } else {
+                showStatus('No cameras found. You can still upload a file.', 'warning');
+            }
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
+        });
+    </script>
+</body>
+</html>

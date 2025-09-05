@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manual QR Scanner - Event System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/"><i class="fas fa-qrcode"></i> QR Event System</a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/"><i class="fas fa-home"></i> Home</a>
+                <a class="nav-link" href="/admin"><i class="fas fa-cog"></i> Admin</a>
+                <a class="nav-link" href="/scanner-simple"><i class="fas fa-camera"></i> Camera Scanner</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container my-4">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <!-- Header -->
+                <div class="text-center mb-4">
+                    <h2><i class="fas fa-keyboard text-primary"></i> Manual QR Scanner</h2>
+                    <p class="text-muted">Enter QR code data manually or scan with your phone</p>
+                </div>
+
+                <!-- Manual Input -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5><i class="fas fa-edit"></i> Manual Entry</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="qrInput" class="form-label">QR Code Data:</label>
+                            <textarea id="qrInput" class="form-control" rows="3" 
+                                placeholder='Paste QR code data here, should look like: {"token":"abc123-def456-..."}'></textarea>
+                        </div>
+                        <button id="validateBtn" class="btn btn-primary">
+                            <i class="fas fa-check"></i> Validate QR Code
+                        </button>
+                        <button id="clearBtn" class="btn btn-secondary ms-2">
+                            <i class="fas fa-trash"></i> Clear
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Alternative: Search by Name/Ticket -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5><i class="fas fa-search"></i> Search Attendee</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="nameSearch" class="form-label">Name:</label>
+                                    <input type="text" id="nameSearch" class="form-control" placeholder="Enter attendee name">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="ticketSearch" class="form-label">Ticket ID:</label>
+                                    <input type="text" id="ticketSearch" class="form-control" placeholder="Enter ticket ID">
+                                </div>
+                            </div>
+                        </div>
+                        <button id="searchBtn" class="btn btn-info">
+                            <i class="fas fa-search"></i> Search & Check In
+                        </button>
+                    </div>
+                </div>
+
+                <!-- QR Code Display for Testing -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5><i class="fas fa-qrcode"></i> Test QR Codes</h5>
+                    </div>
+                    <div class="card-body" id="testQRCodes">
+                        <p class="text-muted">Loading test QR codes...</p>
+                    </div>
+                </div>
+
+                <!-- Result Display -->
+                <div id="result" style="display: none;"></div>
+
+                <!-- Statistics -->
+                <div class="row mt-4">
+                    <div class="col-md-4">
+                        <div class="card text-center bg-success text-white">
+                            <div class="card-body">
+                                <h4 id="successCount">0</h4>
+                                <p class="mb-0">Successful Scans</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card text-center bg-danger text-white">
+                            <div class="card-body">
+                                <h4 id="errorCount">0</h4>
+                                <p class="mb-0">Failed Scans</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card text-center bg-primary text-white">
+                            <div class="card-body">
+                                <h4 id="totalCount">0</h4>
+                                <p class="mb-0">Total Attempts</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let successCount = 0;
+        let errorCount = 0;
+
+        // Load test QR codes
+        fetch('/admin/attendees')
+            .then(response => response.json())
+            .then(attendees => {
+                const container = document.getElementById('testQRCodes');
+                if (attendees.length === 0) {
+                    container.innerHTML = '<p class="text-muted">No attendees found. <a href="/">Upload Excel file first</a></p>';
+                    return;
+                }
+
+                let html = '<div class="row">';
+                attendees.slice(0, 6).forEach(attendee => {
+                    const qrData = JSON.stringify({ token: attendee.qr_token });
+                    html += `
+                        <div class="col-md-6 mb-3">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <h6>${attendee.name}</h6>
+                                    <p class="small text-muted">${attendee.ticket_id}</p>
+                                    <img src="/qr/${attendee.qr_code_path}" style="width: 150px; height: 150px;" alt="QR Code">
+                                    <br>
+                                    <button class="btn btn-sm btn-outline-primary mt-2" onclick="copyQRData('${qrData.replace(/'/g, "\\'")}')">
+                                        Copy QR Data
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                container.innerHTML = html;
+            })
+            .catch(err => {
+                document.getElementById('testQRCodes').innerHTML = '<p class="text-danger">Error loading test data</p>';
+            });
+
+        function copyQRData(qrData) {
+            document.getElementById('qrInput').value = qrData;
+            showResult('QR data copied to input field. Click "Validate QR Code" to test.', 'info');
+        }
+
+        document.getElementById('validateBtn').addEventListener('click', async () => {
+            const qrData = document.getElementById('qrInput').value.trim();
+            
+            if (!qrData) {
+                showResult('Please enter QR code data', 'warning');
+                return;
+            }
+
+            try {
+                const response = await fetch('/validate-qr', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ qrData: qrData })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    successCount++;
+                    showResult(`✅ Welcome ${result.attendee.name}! (${result.attendee.ticketId})`, 'success');
+                } else {
+                    errorCount++;
+                    showResult(`❌ ${result.message}`, 'danger');
+                }
+                
+                updateStats();
+                
+            } catch (error) {
+                errorCount++;
+                showResult(`❌ Network error: ${error.message}`, 'danger');
+                updateStats();
+            }
+        });
+
+        document.getElementById('searchBtn').addEventListener('click', async () => {
+            const name = document.getElementById('nameSearch').value.trim();
+            const ticketId = document.getElementById('ticketSearch').value.trim();
+            
+            if (!name && !ticketId) {
+                showResult('Please enter name or ticket ID', 'warning');
+                return;
+            }
+
+            try {
+                const response = await fetch('/search-attendee', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name, ticketId: ticketId })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    successCount++;
+                    showResult(`✅ Found and checked in: ${result.attendee.name} (${result.attendee.ticketId})`, 'success');
+                } else {
+                    errorCount++;
+                    showResult(`❌ ${result.message}`, 'danger');
+                }
+                
+                updateStats();
+                
+            } catch (error) {
+                errorCount++;
+                showResult(`❌ Network error: ${error.message}`, 'danger');
+                updateStats();
+            }
+        });
+
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            document.getElementById('qrInput').value = '';
+            document.getElementById('nameSearch').value = '';
+            document.getElementById('ticketSearch').value = '';
+        });
+
+        function showResult(message, type) {
+            const resultDiv = document.getElementById('result');
+            const alertClass = type === 'success' ? 'alert-success' : 
+                             type === 'danger' ? 'alert-danger' : 
+                             type === 'warning' ? 'alert-warning' : 'alert-info';
+            
+            resultDiv.innerHTML = `<div class="alert ${alertClass}">${message}</div>`;
+            resultDiv.style.display = 'block';
+
+            setTimeout(() => {
+                resultDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        function updateStats() {
+            document.getElementById('successCount').textContent = successCount;
+            document.getElementById('errorCount').textContent = errorCount;
+            document.getElementById('totalCount').textContent = successCount + errorCount;
+        }
+    </script>
+</body>
+</html>

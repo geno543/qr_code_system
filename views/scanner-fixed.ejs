@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Camera Scanner</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        #camera-video {
+            width: 100%;
+            max-width: 400px;
+            border: 3px solid #007bff;
+            border-radius: 10px;
+        }
+        #qr-reader {
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        .scanner-container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/"><i class="fas fa-qrcode"></i> QR Event System</a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/"><i class="fas fa-home"></i> Home</a>
+                <a class="nav-link" href="/admin"><i class="fas fa-cog"></i> Admin</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container my-4">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="text-center mb-4">
+                    <h2><i class="fas fa-camera text-primary"></i> QR Camera Scanner</h2>
+                    <p class="text-muted">Scan QR codes with your laptop camera</p>
+                </div>
+
+                <!-- Library Loading Status -->
+                <div id="library-status" class="alert alert-info text-center">
+                    <i class="fas fa-spinner fa-spin"></i> Loading QR scanner library...
+                </div>
+
+                <!-- Camera Scanner -->
+                <div class="scanner-container mb-4" id="scanner-section" style="display: none;">
+                    <div id="camera-status" class="alert alert-info text-center">
+                        <i class="fas fa-info-circle"></i> Click "Start Camera" to begin scanning
+                    </div>
+                    
+                    <div class="text-center">
+                        <div id="qr-reader"></div>
+                    </div>
+                    
+                    <div class="text-center mt-3">
+                        <button id="start-scan" class="btn btn-success btn-lg me-2">
+                            <i class="fas fa-play"></i> Start Camera
+                        </button>
+                        <button id="stop-scan" class="btn btn-danger btn-lg" style="display: none;">
+                            <i class="fas fa-stop"></i> Stop Camera
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Manual Entry -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5><i class="fas fa-keyboard"></i> Manual Entry (Backup)</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <textarea id="manual-qr" class="form-control" rows="3" 
+                                    placeholder='Paste QR code data: {"token":"abc123..."}'></textarea>
+                            </div>
+                            <div class="col-md-4">
+                                <button id="validate-manual" class="btn btn-primary w-100">
+                                    <i class="fas fa-check"></i> Validate
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Test QR Codes -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5><i class="fas fa-qrcode"></i> Test QR Codes</h5>
+                    </div>
+                    <div class="card-body" id="test-qr-section">
+                        <p class="text-center">Loading test QR codes...</p>
+                    </div>
+                </div>
+
+                <!-- Result Display -->
+                <div id="scan-result" style="display: none;"></div>
+
+                <!-- Statistics -->
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="card text-center bg-success text-white">
+                            <div class="card-body">
+                                <h4 id="success-count">0</h4>
+                                <p class="mb-0">Success</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center bg-danger text-white">
+                            <div class="card-body">
+                                <h4 id="error-count">0</h4>
+                                <p class="mb-0">Failed</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center bg-warning text-white">
+                            <div class="card-body">
+                                <h4 id="duplicate-count">0</h4>
+                                <p class="mb-0">Duplicate</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center bg-primary text-white">
+                            <div class="card-body">
+                                <h4 id="total-count">0</h4>
+                                <p class="mb-0">Total</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load QR Library -->
+    <script>
+        // Load the QR library dynamically
+        function loadQRLibrary() {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js';
+                script.onload = () => {
+                    console.log('QR library loaded successfully');
+                    resolve();
+                };
+                script.onerror = () => {
+                    console.error('Failed to load QR library');
+                    reject(new Error('Failed to load QR library'));
+                };
+                document.head.appendChild(script);
+            });
+        }
+
+        // Global variables
+        let html5QrcodeScanner = null;
+        let isScanning = false;
+        const stats = {
+            success: 0,
+            error: 0,
+            duplicate: 0,
+            total: 0
+        };
+
+        // Initialize the scanner
+        async function initializeScanner() {
+            try {
+                await loadQRLibrary();
+                
+                // Wait a bit for the library to be fully available
+                setTimeout(() => {
+                    if (typeof Html5Qrcode !== 'undefined') {
+                        document.getElementById('library-status').innerHTML = 
+                            '<i class="fas fa-check"></i> QR scanner ready!';
+                        document.getElementById('library-status').className = 'alert alert-success text-center';
+                        document.getElementById('scanner-section').style.display = 'block';
+                        setupEventListeners();
+                        loadTestQRCodes();
+                    } else {
+                        throw new Error('Html5Qrcode still not available');
+                    }
+                }, 1000);
+                
+            } catch (error) {
+                console.error('Scanner initialization error:', error);
+                document.getElementById('library-status').innerHTML = 
+                    '<i class="fas fa-exclamation-triangle"></i> Camera scanner unavailable. Use manual entry below.';
+                document.getElementById('library-status').className = 'alert alert-warning text-center';
+                setupManualOnly();
+                loadTestQRCodes();
+            }
+        }
+
+        function setupEventListeners() {
+            document.getElementById('start-scan').addEventListener('click', startScanning);
+            document.getElementById('stop-scan').addEventListener('click', stopScanning);
+            document.getElementById('validate-manual').addEventListener('click', validateManual);
+        }
+
+        function setupManualOnly() {
+            document.getElementById('validate-manual').addEventListener('click', validateManual);
+        }
+
+        async function startScanning() {
+            try {
+                if (typeof Html5Qrcode === 'undefined') {
+                    throw new Error('QR library not loaded');
+                }
+
+                document.getElementById('camera-status').innerHTML = 
+                    '<i class="fas fa-spinner fa-spin"></i> Starting camera...';
+                document.getElementById('camera-status').className = 'alert alert-warning text-center';
+
+                html5QrcodeScanner = new Html5Qrcode("qr-reader");
+
+                const config = {
+                    fps: 10,
+                    qrbox: { width: 250, height: 250 },
+                    aspectRatio: 1.0
+                };
+
+                // Try to get cameras first
+                const cameras = await Html5Qrcode.getCameras();
+                console.log('Available cameras:', cameras.length);
+
+                if (cameras.length === 0) {
+                    throw new Error('No cameras found');
+                }
+
+                // Use the first available camera
+                await html5QrcodeScanner.start(
+                    cameras[0].id,
+                    config,
+                    onScanSuccess,
+                    onScanError
+                );
+
+                isScanning = true;
+                document.getElementById('start-scan').style.display = 'none';
+                document.getElementById('stop-scan').style.display = 'inline-block';
+                
+                document.getElementById('camera-status').innerHTML = 
+                    '<i class="fas fa-camera"></i> Camera active - Point at QR codes';
+                document.getElementById('camera-status').className = 'alert alert-success text-center';
+
+            } catch (error) {
+                console.error('Camera start error:', error);
+                handleCameraError(error);
+            }
+        }
+
+        async function stopScanning() {
+            if (html5QrcodeScanner && isScanning) {
+                try {
+                    await html5QrcodeScanner.stop();
+                    html5QrcodeScanner = null;
+                    isScanning = false;
+                    
+                    document.getElementById('start-scan').style.display = 'inline-block';
+                    document.getElementById('stop-scan').style.display = 'none';
+                    
+                    document.getElementById('camera-status').innerHTML = 
+                        '<i class="fas fa-info-circle"></i> Camera stopped';
+                    document.getElementById('camera-status').className = 'alert alert-info text-center';
+                    
+                } catch (error) {
+                    console.error('Error stopping camera:', error);
+                }
+            }
+        }
+
+        function handleCameraError(error) {
+            let message = 'Camera error: ';
+            
+            if (error.name === 'NotAllowedError') {
+                message += 'Camera permission denied. Please allow camera access and try again.';
+            } else if (error.name === 'NotFoundError') {
+                message += 'No camera found. Please ensure your laptop has a camera.';
+            } else if (error.name === 'NotReadableError') {
+                message += 'Camera is in use by another application.';
+            } else if (error.message.includes('not loaded')) {
+                message += 'Scanner library failed to load. Use manual entry instead.';
+            } else {
+                message += error.message || 'Unknown error occurred.';
+            }
+            
+            document.getElementById('camera-status').innerHTML = 
+                `<i class="fas fa-exclamation-triangle"></i> ${message}`;
+            document.getElementById('camera-status').className = 'alert alert-danger text-center';
+        }
+
+        function onScanSuccess(decodedText, decodedResult) {
+            console.log('QR Code scanned:', decodedText);
+            processQRCode(decodedText);
+        }
+
+        function onScanError(error) {
+            // Ignore scan errors - normal when no QR code visible
+        }
+
+        function validateManual() {
+            const qrData = document.getElementById('manual-qr').value.trim();
+            if (!qrData) {
+                showResult({ success: false, message: 'Please enter QR code data' });
+                return;
+            }
+            processQRCode(qrData);
+            document.getElementById('manual-qr').value = '';
+        }
+
+        async function processQRCode(qrData) {
+            try {
+                const response = await fetch('/validate-qr', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ qrData: qrData })
+                });
+
+                const result = await response.json();
+                showResult(result);
+                updateStats(result);
+
+            } catch (error) {
+                console.error('Validation error:', error);
+                const result = { success: false, message: 'Network error: ' + error.message };
+                showResult(result);
+                updateStats(result);
+            }
+        }
+
+        function showResult(result) {
+            const resultDiv = document.getElementById('scan-result');
+            
+            if (result.success) {
+                resultDiv.innerHTML = `
+                    <div class="alert alert-success">
+                        <h4><i class="fas fa-check-circle"></i> Welcome!</h4>
+                        <h5>${result.attendee.name}</h5>
+                        <p>Ticket: ${result.attendee.ticketId}</p>
+                        <small>Time: ${new Date().toLocaleTimeString()}</small>
+                    </div>
+                `;
+            } else {
+                resultDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <h4><i class="fas fa-times-circle"></i> Scan Failed</h4>
+                        <p>${result.message}</p>
+                        <small>Time: ${new Date().toLocaleTimeString()}</small>
+                    </div>
+                `;
+            }
+            
+            resultDiv.style.display = 'block';
+            setTimeout(() => {
+                resultDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        function updateStats(result) {
+            stats.total++;
+            
+            if (result.success) {
+                stats.success++;
+            } else if (result.message && result.message.includes('already')) {
+                stats.duplicate++;
+            } else {
+                stats.error++;
+            }
+            
+            document.getElementById('success-count').textContent = stats.success;
+            document.getElementById('error-count').textContent = stats.error;
+            document.getElementById('duplicate-count').textContent = stats.duplicate;
+            document.getElementById('total-count').textContent = stats.total;
+        }
+
+        function copyQRData(qrData) {
+            document.getElementById('manual-qr').value = qrData;
+            showResult({ success: false, message: 'QR data copied. Click Validate to test.' });
+        }
+
+        function loadTestQRCodes() {
+            fetch('/admin/attendees')
+                .then(response => response.json())
+                .then(attendees => {
+                    const container = document.getElementById('test-qr-section');
+                    
+                    if (attendees.length === 0) {
+                        container.innerHTML = '<p class="text-center">No test data. <a href="/">Upload Excel file first</a></p>';
+                        return;
+                    }
+
+                    let html = '<div class="row">';
+                    attendees.slice(0, 3).forEach(attendee => {
+                        const qrData = JSON.stringify({ token: attendee.qr_token });
+                        html += `
+                            <div class="col-md-4 text-center mb-3">
+                                <h6>${attendee.name}</h6>
+                                <p class="small">${attendee.ticket_id}</p>
+                                <img src="/qr/${attendee.qr_code_path}" style="width: 150px;" class="mb-2">
+                                <br>
+                                <button class="btn btn-sm btn-outline-primary" onclick="copyQRData('${qrData.replace(/'/g, "\\'")}')">
+                                    Copy Data
+                                </button>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                    container.innerHTML = html;
+                })
+                .catch(err => {
+                    document.getElementById('test-qr-section').innerHTML = '<p class="text-danger text-center">Error loading test data</p>';
+                });
+        }
+
+        // Initialize when page loads
+        window.addEventListener('load', initializeScanner);
+
+        // Cleanup
+        window.addEventListener('beforeunload', () => {
+            if (isScanning) {
+                stopScanning();
+            }
+        });
+    </script>
+</body>
+</html>
