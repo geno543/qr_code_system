@@ -11,10 +11,5 @@
       "src": "/(.*)",
       "dest": "/server-vercel.js"
     }
-  ],
-  "functions": {
-    "server-vercel.js": {
-      "maxDuration": 30
-    }
-  }
+  ]
 }
