@@ -1,46 +1,61 @@
-# PowerShell script to upload QR Code System to GitHub
+# PowerShell script to upload QR Code System fixes to GitHub
 Write-Host "🚀 Starting GitHub upload process..." -ForegroundColor Green
 
 # Navigate to project directory
 Set-Location "c:\Users\acer\qr mun"
+Write-Host "� Current directory: $(Get-Location)" -ForegroundColor Yellow
 
-# Initialize git if needed
-Write-Host "📋 Initializing Git repository..." -ForegroundColor Yellow
-git init
-
-# Add remote repository
-Write-Host "🔗 Adding GitHub remote..." -ForegroundColor Yellow
-git remote remove origin 2>$null
-git remote add origin https://github.com/geno543/qr_code_system.git
-
-# Configure git user (if needed)
-git config user.name "geno543" 2>$null
-git config user.email "your-email@example.com" 2>$null
+# Show git status
+Write-Host "� Checking git status..." -ForegroundColor Yellow
+git status
 
 # Add all files
-Write-Host "📁 Adding all files to git..." -ForegroundColor Yellow
+Write-Host "➕ Adding all files to git..." -ForegroundColor Yellow
 git add .
 
-# Commit changes
-Write-Host "💾 Committing changes..." -ForegroundColor Yellow
-git commit -m "Complete QR Event Management System - Mobile optimized QR scanner with camera support - Supabase cloud database integration - Fixed QR image naming with ticket IDs - Bulk download functionality - Admin dashboard with real-time updates - Vercel deployment ready - Complete documentation"
+# Show what will be committed
+Write-Host "� Files to be committed:" -ForegroundColor Cyan
+git status --short
 
-# Set main branch
-Write-Host "🌟 Setting main branch..." -ForegroundColor Yellow
-git branch -M main
+# Create commit
+Write-Host "💾 Creating commit..." -ForegroundColor Yellow
+git commit -m "Fix Vercel serverless function crashes - Environment variable handling
+
+✅ ROOT CAUSE IDENTIFIED: Environment variables not available during module initialization in Vercel
+
+🔧 FIXES APPLIED:
+- Modified supabase-db.js to read env vars in constructor instead of module level  
+- Added lazy database initialization with proper error handling
+- Created simplified API (api/simple.js) for testing
+- Added comprehensive diagnostic endpoints (api/diagnostic.js)
+- Enhanced error handling and logging throughout
+
+📁 NEW FILES CREATED:
+- api/simple.js - Minimal working API for testing
+- api/diagnostic.js - Detailed debugging endpoint  
+- vercel-test.json - Alternative Vercel configuration
+- VERCEL_DEBUGGING_GUIDE.md - Step-by-step debugging instructions
+- push-to-github.bat - Manual upload script
+
+🎯 EXPECTED RESULT: Resolves 500 FUNCTION_INVOCATION_FAILED error on Vercel deployment
+
+🧪 TEST ENDPOINTS AFTER DEPLOYMENT:
+- /api/health - Health check with environment info
+- /api/test - Environment variable verification"
 
 # Push to GitHub
-Write-Host "📤 Pushing to GitHub..." -ForegroundColor Yellow
-git push -u origin main --force
-
-Write-Host "✅ Upload complete!" -ForegroundColor Green
-Write-Host "🌐 Repository: https://github.com/geno543/qr_code_system" -ForegroundColor Cyan
+Write-Host "⬆️ Pushing to GitHub..." -ForegroundColor Green
+git push origin main
 
 # Verify upload
-Write-Host "🔍 Verifying upload..." -ForegroundColor Yellow
-git log --oneline -3
+Write-Host "✅ Upload completed! Verifying..." -ForegroundColor Green
+Write-Host "🌐 Repository: https://github.com/geno543/qr_code_system" -ForegroundColor Cyan
 
-Write-Host "📋 Repository contents:" -ForegroundColor Yellow
-git ls-files | Select-Object -First 20
+# Show recent commits
+Write-Host "� Recent commits:" -ForegroundColor Cyan
+git log --oneline -5
 
-Write-Host "🎉 QR Code System successfully uploaded to GitHub!" -ForegroundColor Green
+Write-Host "🎉 QR Code System fixes successfully uploaded to GitHub!" -ForegroundColor Green
+Write-Host "🔗 Check your Vercel dashboard for automatic deployment" -ForegroundColor Yellow
+
+Read-Host "Press Enter to continue..."

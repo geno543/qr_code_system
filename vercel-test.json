@@ -3,7 +3,7 @@
   "name": "qr-event-system",
   "builds": [
     {
-      "src": "api/index.js",
+      "src": "api/simple.js",
       "use": "@vercel/node",
       "config": {
         "maxLambdaSize": "50mb"
@@ -13,15 +13,15 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/api/index.js"
+      "dest": "/api/simple.js"
     },
     {
       "src": "/(.*)",
-      "dest": "/api/index.js"
+      "dest": "/api/simple.js"
     }
   ],
   "functions": {
-    "api/index.js": {
+    "api/simple.js": {
       "maxDuration": 30
     }
   },
