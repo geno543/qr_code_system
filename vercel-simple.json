@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "name": "qr-event-system",
+  "functions": {
+    "api/*.js": {
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api/index.js"
+    }
+  ]
+}
