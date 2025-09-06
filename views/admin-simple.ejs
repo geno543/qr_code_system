@@ -440,7 +440,7 @@
                     </td>
                     <td>
                         ${attendee.qr_code ? 
-                            `<img src="${attendee.qr_code}" style="width: 50px; height: 50px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;" alt="QR Code" onclick="viewQRCode('${attendee.qr_code}', '${attendee.name}')">` :
+                            `<img src="${attendee.qr_code}" style="width: 50px; height: 50px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;" alt="QR Code" onclick="viewQRCode('${attendee.qr_code}', '${attendee.name}', '${attendee.email || 'no_email'}')">` :
                             '<i class="fas fa-exclamation-triangle text-warning" title="QR code not generated"></i>'
                         }
                     </td>
@@ -779,7 +779,7 @@
             }
         }
 
-        function viewQRCode(qrUrl, attendeeName) {
+        function viewQRCode(qrUrl, attendeeName, email) {
             // Create modal to view QR code
             const modal = document.createElement('div');
             modal.className = 'modal fade';
@@ -793,7 +793,7 @@
                         <div class="modal-body text-center">
                             <img src="${qrUrl}" class="img-fluid" style="max-width: 300px;" alt="QR Code">
                             <div class="mt-3">
-                                <a href="${qrUrl}" download="${attendeeName.replace(/[^a-zA-Z0-9]/g, '_')}_QR.png" class="btn btn-primary">
+                                <a href="${qrUrl}" download="${email}_${attendeeName.replace(/[^a-zA-Z0-9]/g, '_')}.png" class="btn btn-primary">
                                     <i class="fas fa-download"></i> Download
                                 </a>
                             </div>

@@ -15,7 +15,7 @@ require('dotenv').config();
 const db = require('./supabase-db');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 
 // Admin credentials from environment
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'genoo';
@@ -469,8 +469,9 @@ app.post('/upload-excel', upload.single('excelFile'), async (req, res) => {
                     }
                 });
 
-                // Generate unique filename for the QR code
-                const qrFileName = `${qrToken}.png`;
+                // Generate unique filename for the QR code using email
+                const cleanEmail = email.replace(/[^a-zA-Z0-9@\.\-_]/g, '').replace(/[@\.]/g, '_');
+                const qrFileName = `${cleanEmail}_${qrToken.substring(0, 8)}.png`;
                 
                 // Upload QR code to Supabase Storage
                 const qrCodeUrl = await db.uploadQRCode(qrCodeBuffer, qrFileName);
@@ -809,9 +810,11 @@ app.get('/download/qr-codes', async (req, res) => {
                     const response = await fetch(attendee.qr_code);
                     const buffer = await response.buffer();
                     
-                    // Clean name for filename
+                    // Use email as the primary identifier for filename
+                    const email = attendee.email || 'no_email';
+                    const cleanEmail = email.replace(/[^a-zA-Z0-9@\.\-_]/g, '').replace(/[@\.]/g, '_');
                     const cleanName = attendee.name.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_');
-                    const filename = `${cleanName}_${attendee.attendee_id}.png`;
+                    const filename = `${cleanEmail}_${cleanName}.png`;
                     
                     archive.append(buffer, { name: filename });
                 } catch (fetchError) {
@@ -913,7 +916,13 @@ app.get('/download-qr-codes', async (req, res) => {
                     // Fetch QR code from Supabase Storage URL
                     const response = await fetch(attendee.qr_code);
                     const buffer = await response.buffer();
-                    const filename = `${attendee.name}_${attendee.attendee_id}.png`;
+                    
+                    // Use email as the primary identifier for filename
+                    const email = attendee.email || 'no_email';
+                    const cleanEmail = email.replace(/[^a-zA-Z0-9@\.\-_]/g, '').replace(/[@\.]/g, '_');
+                    const cleanName = attendee.name.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_');
+                    const filename = `${cleanEmail}_${cleanName}.png`;
+                    
                     archive.append(buffer, { name: filename });
                 } catch (fetchError) {
                     console.error(`Error fetching QR code for ${attendee.name}:`, fetchError);
